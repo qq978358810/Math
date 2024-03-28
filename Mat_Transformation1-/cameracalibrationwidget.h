@@ -17,10 +17,6 @@
 #include <QMessageBox>
 #include <QRegExp>
 #include <QComboBox>
-#include <opencv2/opencv.hpp>
-#include <iostream>
-#include <vector>
-
 #include "globlealgorithm.h"
 #include "cameracalibrationalgorithm.h"
 class CameraCalibrationWidget : public QWidget
@@ -36,8 +32,6 @@ signals:
 
 protected slots:
 
-    void slot_executeOpenCV();
-    void slot_loadImages();
     void slot_loadToTable();
     void slot_setClick();
     void slot_executeClick();
@@ -51,10 +45,6 @@ private:
     QSpinBox *m_imagesCount;//设置图片个数
     QLineEdit *m_splitChar;//分割符
     QPushButton *m_load;//加载到表格
-    QPushButton *m_loadImages;//加载文件 - OpenCV
-    QPushButton *m_executeOpenCV;//加载文件 - OpenCV
-    QSpinBox* m_rows;   //标定版行
-    QSpinBox* m_cols;   //标定板列
     QCheckBox *m_row;//按行加载数据
     QCheckBox *m_col;//按列加载数据
     QComboBox *m_comboBoxDis;//畸变系数个数
@@ -66,13 +56,5 @@ private:
     QTextEdit *m_showTextEdit;//显示记录
 
     QString old_text;
-
-
-
-
-
-    std::vector<cv::Mat> m_imgs;
-    std::vector<std::vector<cv::Point3f>> m_objectPoints;
-    std::vector<std::vector<cv::Point2f>> m_imgsPoints;
 };
 #endif // CAMERACALIBRATIONWIDGET_H

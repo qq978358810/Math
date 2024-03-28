@@ -1,129 +1,22 @@
 #ifndef CAMERACALIBRATIONALGORITHM_H
 #define CAMERACALIBRATIONALGORITHM_H
 
-#include <Eigen/Dense>
+#include <QObject>
+#include "globlealgorithm.h"
 #include <iostream>
-#include <vector>
 
-#define DERIV_STEP 1e-6  //微小变化量,用于中心差分法求导
-
-/* 普通最小二乘 Ax = B
- * (A^T * A) * x = A^T * B
- * x = (A^T * A)^-1 * A^T * B
- */
-Eigen::VectorXd LeastSquares(Eigen::MatrixXd A, Eigen::VectorXd B);
-//旋转矩阵 --> 旋转向量    :罗德里格斯公式逆变换
-Eigen::Vector3d Rodrigues(const Eigen::Matrix3d& R);
-//旋转向量 --> 旋转矩阵  :罗德里格斯公式
-Eigen::Matrix3d Rodrigues(const Eigen::Vector3d& _r);
-
-    /* 列文伯格马夸尔特法(LMA) ==  使用信赖域的高斯牛顿法，鲁棒性更好， 确定目标函数和约束来对现有的参数优化
-     * params 初始参数,待优化
-     * otherArgs 其他参数
-     * _ResidualsVector 自定义函数：获取预测值和实际值的差值
-     * _JacobiMat 自定义函数：获取当前的雅可比矩阵
-     * _epsilon 收敛精度
-     * _maxIteCount 最大迭代次数
-     * _epsilon 和 _maxIteCount 达到任意一个条件就停止返回
-     */
-    template <class _T,class _ResidualsVector,class _JacobiMat>
-    Eigen::VectorXd LevenbergMarquardtAlgorithm(Eigen::VectorXd params,_T otherArgs, _ResidualsVector ResidualsVector,_JacobiMat JacobiMat,double _epsilon = 1e-12,int _maxIteCount = 99)
-    {
-        int iterCount=0;
-        double currentEpsilon =0.0;
-        // ε 终止条件
-        double epsilon = _epsilon;
-        double _currentEpsilon=0.0;
-        // τ
-        double tau = 1e-6;
-
-        //迭代次数
-        int maxIteCount = _maxIteCount;
-        int k=0;
-        int v=2;
-
-        //求雅可比矩阵
-        Eigen::MatrixXd Jac = JacobiMat(params,otherArgs);
-
-        //用雅可比矩阵近似黑森矩阵
-        Eigen::MatrixXd Hessen = Jac .transpose() * Jac ;
-
-        //获取预测偏差值 r= ^y(预测值) - y(实际值)
-        //保存残差值
-        Eigen::VectorXd residual = ResidualsVector(params,otherArgs);
-        //梯度
-        Eigen::MatrixXd g = Jac.transpose() * residual;
-
-        //found 为true 结束循环
-        bool found = ( g.lpNorm<Eigen::Infinity>() <= epsilon );
-
-        //阻尼参数μ
-        double mu =  tau * Hessen.diagonal().maxCoeff();
-        while(!found && k<maxIteCount)
-        {
-            k++;
-            //LM方向  uI => I 用黑森矩阵对角线代替
-            //Eigen::MatrixXd delta_x = - (Hessen + mu*Hessen.asDiagonal().diagonal()).inverse() * g;
-
-            Eigen::VectorXd delta_x = - (Hessen + mu*Eigen::MatrixXd::Identity(Hessen.cols(), Hessen.cols())).inverse() * g;
-
-
-            if( delta_x.lpNorm<2>() <= epsilon * (params.lpNorm<2>() + epsilon ))
-            {
-                currentEpsilon = delta_x.lpNorm<2>();
-                found = true;
-            }
-            else
-            {
-                Eigen::VectorXd newParams = params + delta_x;
-                //L(0) - L(delta) = 0.5*(delta^-1)*(μ*delta - g)
-                //ρ     =    (F(x) - F(x_new)) / (L(0) - L(delta));
-                double rho = (ResidualsVector(params,otherArgs).array().pow(2).sum() - ResidualsVector(newParams,otherArgs).array().pow(2).sum())
-                        / (0.5*delta_x.transpose()*(mu * delta_x - g)).sum();
-
-                if(rho>0)
-                {
-                    params = newParams;
-                    Jac = JacobiMat(params,otherArgs);
-                    Hessen = Jac.transpose() * Jac ;
-                    //获取预测偏差值 r= ^y(预测值) - y(实际值)
-                    residual = ResidualsVector(params,otherArgs);
-                    g = Jac.transpose() * residual;
-                    _currentEpsilon = g.lpNorm<Eigen::Infinity>();
-                    found = (_currentEpsilon  <= epsilon );
-                    mu = mu* std::max(1/3.0 , 1-std::pow(2*rho -1,3));
-                    v=2;
-                }
-                else
-                {
-                    mu = mu*v;
-                    v = 2*v;
-                }
-            }
-            iterCount=k;
-            currentEpsilon = _currentEpsilon;
-            // 当前迭代次数,当前精度
-            std::cout<<"当前迭代次数:"<<std::to_string(iterCount)<< "收敛精度:"<<std::to_string(currentEpsilon)<<std::endl;
-        }
-        return params;
-    }
-
-
-
-
-
-//用于求相机参数的其他参数
+#define DERIV_STEP 1e-5
+#define INTRINSICP_COUNT 5 //内参个数
 typedef struct _CameraOtherParameter
 {
-    std::vector<Eigen::MatrixXd>  srcL;              //物体点
-    std::vector<Eigen::MatrixXd>  dstL;              //图像点
+    QList<Eigen::MatrixXd>  srcL;              //物体点
+    QList<Eigen::MatrixXd>  dstL;              //图像点
     int intrinsicCount;                //内参个数
     int disCount;                       //畸变个数 //畸变系数 2:k1,k2,(4:)p1,p2,[(5:)k3]
     int imageCount;                     // 图像个数
 
 }S_CameraOtherParameter;
 
-//相机参数
 typedef struct _CameraParameter
 {
     //内参
@@ -133,66 +26,62 @@ typedef struct _CameraParameter
     Eigen::VectorXd distortionCoeff;
 
     //外参
-    std::vector<Eigen::MatrixXd> externalParams;
+    QList<Eigen::MatrixXd> externalParams;
 
     //每张图片单应性矩阵
-    std::vector<Eigen::Matrix3d> homographyList;
+    QList<Eigen::Matrix3d> homographyList;
 
     //每张图片重投影误差
-    std::vector<double> reprojErrL;
+    QList<double> reprojErrL;
 
     //总重投影误差
     double reprojErr;
 }S_CameraP;
-
-
-//存放坐标
-struct PointF
+class CameraCalibration : public QObject
 {
-    double _x;
-    double _y;
-
-    PointF() {}
-
-    double x()
-    {
-        return _x;
-    }
-
-    double y()
-    {
-        return _y;
-    }
-
-};
-///////////////////////////////////////////////////////////////
-/// \brief The CameraCalibration class
-/// 相机标定类
-class CameraCalibration
-{
+    Q_OBJECT
 public:
-    explicit CameraCalibration(std::vector<std::vector<PointF> > objectPointsL, std::vector<std::vector<PointF> > imagePointsL,int _disCount=5,int _intrinsicCount=5,double _epsilon = 1e-12,int _maxIteCount = 99);
+
+    //    typedef enum _IntrinsicParamType
+    //    {
+    //        _4=4, // fx,fy,u0,v0
+    //        _5=5 // fx,γ,fy,u0,v0
+    //    }IntrinsicParamType;
+    //    typedef enum _DistortionCoeffType
+    //    {
+    //        No = 0, //无畸变
+    //        K1K2=2, // k1,k2
+    //        K1K2P1P2=4, // k1,k2,p1,p2
+    //        K1K2P1P2K3=5 // k1,k2,p1,p2,K3
+    //    }DistortionCoeffType;
+    explicit CameraCalibration(QList<QList<QPointF> > objectPointsL, QList<QList<QPointF> > imagePointsL,quint32 _disCount=5,quint32 _intrinsicCount=5,double _epsilon = 1e-12,int _maxIteCount = 99,QObject *parent = nullptr);
 
     //求单应性矩阵H
     Eigen::Matrix3d  GetHomography(const Eigen::MatrixXd& src, const Eigen::MatrixXd& dst);
     //求相机内参
-    Eigen::Matrix3d  GetIntrinsicParameter(const std::vector<Eigen::Matrix3d>& HList);
+    Eigen::Matrix3d  GetIntrinsicParameter(const QList<Eigen::Matrix3d>& HList);
 
     //求相机外参
-    std::vector<Eigen::MatrixXd>  GetExternalParameter(const std::vector<Eigen::Matrix3d>& HList,const Eigen::Matrix3d& intrinsicParam);
+    QList<Eigen::MatrixXd>  GetExternalParameter(const QList<Eigen::Matrix3d>& HList,const Eigen::Matrix3d& intrinsicParam);
 
     //获取畸变系数 k1,k2,[p1,p2,[k3]]
-    void GetDistortionCoeff(const std::vector<Eigen::MatrixXd>&  srcL, const std::vector<Eigen::MatrixXd>&  dstL,const Eigen::Matrix3d& intrinsicParam ,const std::vector<Eigen::MatrixXd>& externalParams,Eigen::VectorXd & disCoeff);
+    void GetDistortionCoeff(const QList<Eigen::MatrixXd>&  srcL, const QList<Eigen::MatrixXd>&  dstL,const Eigen::Matrix3d& intrinsicParam ,const QList<Eigen::MatrixXd>& externalParams,Eigen::VectorXd & disCoeff);
 
     //优化所有参数 (内参,畸变系数,外参) 返回重投影误差值
-    double OptimizeParameter(const std::vector<Eigen::MatrixXd>&  srcL,const std::vector<Eigen::MatrixXd>&  dstL, Eigen::Matrix3d& intrinsicParam , Eigen::VectorXd& distortionCoeff, std::vector<Eigen::MatrixXd>& externalParams);
+    double OptimizeParameter(const QList<Eigen::MatrixXd>&  srcL,const QList<Eigen::MatrixXd>&  dstL, Eigen::Matrix3d& intrinsicParam , Eigen::VectorXd& distortionCoeff, QList<Eigen::MatrixXd>& externalParams);
 
     //获取相机参数
     S_CameraP GetCameraParameter();
+
+    //获取初始内参
+    // Eigen::Matrix3d GetInitIntrinsicParameter(const QList<Eigen::Matrix3d>& HList,int width,int height);
 protected:
 
+    //双线性插值
+    //int Interp2()
+
     //物体坐标和像素坐标转换矩阵形式
-    std::pair<std::vector<Eigen::MatrixXd>,std::vector<Eigen::MatrixXd>> PointsToMat(std::vector<std::vector<PointF> > objectPointsL, std::vector<std::vector<PointF> > imagePointsL);
+    QPair<QList<Eigen::MatrixXd>,QList<Eigen::MatrixXd>> PointsToMat(QList<QList<QPointF> > objectPointsL, QList<QList<QPointF> > imagePointsL);
 
     //根据单应性矩阵H返回pq位置对应的v向量
     Eigen::VectorXd CreateV(int p, int q,const Eigen::Matrix3d &H);
@@ -202,21 +91,25 @@ protected:
 
 
     //整合所有参数(内参,畸变系数,外参)到一个向量中
-    Eigen::VectorXd ComposeParameter(const Eigen::Matrix3d& intrinsicParam ,const Eigen::VectorXd& distortionCoeff,const std::vector<Eigen::MatrixXd>& externalParams);
+    Eigen::VectorXd ComposeParameter(const Eigen::Matrix3d& intrinsicParam ,const Eigen::VectorXd& distortionCoeff,const QList<Eigen::MatrixXd>& externalParams);
 
     //分解所有参数  得到对应的内参,畸变矫正系数,外参
-    void DecomposeParamter(const Eigen::VectorXd &P, Eigen::Matrix3d& intrinsicParam , Eigen::VectorXd& distortionCoeff, std::vector<Eigen::MatrixXd>& externalParams);
+    void DecomposeParamter(const Eigen::VectorXd &P, Eigen::Matrix3d& intrinsicParam , Eigen::VectorXd& distortionCoeff, QList<Eigen::MatrixXd>& externalParams);
 
     //获取标准差
     double StdDiffer(const Eigen::VectorXd& data);
     // 归一化
     Eigen::Matrix3d Normalization (const Eigen::MatrixXd& P);
 
+signals:
+
 private:
     //多张物体点
-    std::vector<std::vector<Eigen::MatrixXd> > m_srcPointsL;
+    QList<QList<Eigen::MatrixXd> > m_srcPointsL;
     //多张像素点
-    std::vector<std::vector<Eigen::MatrixXd> > m_dstPointsL;
+    QList<QList<Eigen::MatrixXd> > m_dstPointsL;
+
+
 
     //内参
     Eigen::Matrix3d m_intrinsicParameter;
@@ -225,40 +118,149 @@ private:
     Eigen::VectorXd m_distortionCoeff;
 
     //外参
-    std::vector<Eigen::MatrixXd> m_externalParams;
+    QList<Eigen::MatrixXd> m_externalParams;
 
     //每张图片单应性矩阵
-    std::vector<Eigen::Matrix3d> m_homographyList;
+    QList<Eigen::Matrix3d> m_homographyList;
 
     //每张图片重投影误差
-    std::vector<double> m_reprojErrL;
+    QList<double> m_reprojErrL;
 
     //重投影误差
     double m_reprojErr;
 
-    //内参个数
-    int m_intrinsicCount;
     //畸变个数
-    int m_disCount;
+    quint32 m_disCount;
     //收敛精度
     double m_epsilon ;
     //最大迭代次数
     int m_maxIteCount;
 
 };
+////内参残差值向量
+//class IntrinsicParameResidualsVector
+//{
+//public:
+//    Eigen::VectorXd  operator()(const Eigen::VectorXd& parameter,const QList<Eigen::Matrix3d> &HList)
+//    {
 
+//        Matrix3d K;
+//        K<<parameter(0),parameter(1),parameter(3),
+//                parameter(1),parameter(2),parameter(4),
+//                parameter(3),parameter(4),parameter(5);
+//        int dataCount = HList.count();
+
+//        //保存残差值
+//        Eigen::VectorXd residual(dataCount*2);
+//        //获取预测偏差值 r= ^y(预测值) - y(实际值)
+//        for(int i=0;i<dataCount;++i)
+//        {
+//            Eigen::Vector3d h1= HList.at(i).col(0);
+//            Eigen::Vector3d h2= HList.at(i).col(1);
+
+//            residual(i*2) = (h1.transpose() * K.inverse().transpose() * K.inverse() * h2).sum();
+//            residual(i*2+1) = (h1.transpose() * K.inverse().transpose() * K.inverse() * h1).sum() - (h2.transpose() * K.inverse().transpose() * K.inverse() * h2).sum();
+
+//        }
+//        return residual;
+//    }
+
+//};
+////内参雅克比矩阵
+//class IntrinsicParameJacobi
+//{
+//public:
+//    //求偏导1
+//    double PartialDeriv_1(const Eigen::VectorXd& parameter,int paraIndex,const Eigen::Matrix3d &H)
+//    {
+//        Eigen::VectorXd para1 = parameter;
+//        Eigen::VectorXd para2 = parameter;
+//        para1(paraIndex) -= DERIV_STEP;
+//        para2(paraIndex) += DERIV_STEP;
+//        Matrix3d K1,K2;
+//        K1<<para1(0),para1(1),para1(3),
+//                para1(1),para1(2),para1(4),
+//                para1(3),para1(4),para1(5);
+//        K2<<para2(0),para2(1),para2(3),
+//                para2(1),para2(2),para2(4),
+//                para2(3),para2(4),para2(5);
+
+//        Eigen::Vector3d h1= H.col(0);
+//        Eigen::Vector3d h2= H.col(1);
+
+//        //逻辑
+//        double obj1 = (h1.transpose() * K1.inverse().transpose() * K1.inverse() * h2).sum();
+//        double obj2 = (h1.transpose() * K2.inverse().transpose() * K2.inverse() * h2).sum();
+
+//        return (obj2 - obj1) / (2 * DERIV_STEP);
+//    }
+
+//    //求偏导2
+//    double PartialDeriv_2(const Eigen::VectorXd& parameter,int paraIndex,const Eigen::Matrix3d &H)
+//    {
+//        Eigen::VectorXd para1 = parameter;
+//        Eigen::VectorXd para2 = parameter;
+//        para1(paraIndex) -= DERIV_STEP;
+//        para2(paraIndex) += DERIV_STEP;
+//        Matrix3d K1,K2;
+//        K1<<para1(0),para1(1),para1(3),
+//                para1(1),para1(2),para1(4),
+//                para1(3),para1(4),para1(5);
+//        K2<<para2(0),para2(1),para2(3),
+//                para2(1),para2(2),para2(4),
+//                para2(3),para2(4),para2(5);
+
+//        Eigen::Vector3d h1= H.col(0);
+//        Eigen::Vector3d h2= H.col(1);
+
+//        //逻辑
+//        double obj1 = (h1.transpose() * K1.inverse().transpose() * K1.inverse() * h1).sum() - (h2.transpose() * K1.inverse().transpose() * K1.inverse() * h2).sum();
+//        double obj2 = (h1.transpose() * K2.inverse().transpose() * K2.inverse() * h1).sum() - (h2.transpose() * K2.inverse().transpose() * K2.inverse() * h2).sum();
+//        return (obj2 - obj1) / (2 * DERIV_STEP);
+//    }
+//public:
+
+//    Eigen::MatrixXd operator()(const Eigen::VectorXd& parameter,const QList<Eigen::Matrix3d> &HList)
+//    {
+
+//        int count = HList.count();
+//        Eigen::MatrixXd Jac(count*2, parameter.rows());
+
+//        for (int i = 0; i < count; i++)
+//        {
+//            Matrix3d H = HList.at(i);
+//            Jac(i*2,0) = PartialDeriv_1(parameter,0,H);
+//            Jac(i*2,1) = PartialDeriv_1(parameter,1,H);
+//            Jac(i*2,2) = PartialDeriv_1(parameter,2,H);
+//            Jac(i*2,3) = PartialDeriv_1(parameter,3,H);
+//            Jac(i*2,4) = PartialDeriv_1(parameter,4,H);
+//            Jac(i*2,5) = PartialDeriv_1(parameter,5,H);
+
+
+//            Jac(i*2+1,0) = PartialDeriv_2(parameter,0,H);
+//            Jac(i*2+1,1) = PartialDeriv_2(parameter,1,H);
+//            Jac(i*2+1,2) = PartialDeriv_2(parameter,2,H);
+//            Jac(i*2+1,3) = PartialDeriv_2(parameter,3,H);
+//            Jac(i*2+1,4) = PartialDeriv_2(parameter,4,H);
+//            Jac(i*2+1,5) = PartialDeriv_2(parameter,5,H);
+
+//        }
+//        return Jac;
+//    }
+
+//};
 //单应性残差值向量
 class HomographyResidualsVector
 {
 public:
-    Eigen::VectorXd  operator()(const Eigen::VectorXd& parameter,const std::vector<Eigen::MatrixXd> &otherArgs)
+    Eigen::VectorXd  operator()(const Eigen::VectorXd& parameter,const QList<Eigen::MatrixXd> &otherArgs)
     {
         Eigen::MatrixXd inValue = otherArgs.at(0);
         Eigen::MatrixXd outValue = otherArgs.at(1);
         int dataCount = inValue.rows();
         //保存残差值
         Eigen::VectorXd residual(dataCount*2) ,residualNew(dataCount*2);
-        Eigen::Matrix3d HH =  parameter.reshaped<Eigen::RowMajor>(3,3);
+        Eigen::Matrix3d HH =  parameter.reshaped<RowMajor>(3,3);
         //获取预测偏差值 r= ^y(预测值) - y(实际值)
         for(int i=0;i<dataCount;++i)
         {
@@ -319,7 +321,7 @@ class HomographyJacobi
     }
 public:
 
-    Eigen::MatrixXd operator()(const Eigen::VectorXd& parameter,const std::vector<Eigen::MatrixXd> &otherArgs)
+    Eigen::MatrixXd operator()(const Eigen::VectorXd& parameter,const QList<Eigen::MatrixXd> &otherArgs)
     {
         Eigen::MatrixXd inValue = otherArgs.at(0);
         int rowNum = inValue.rows();
@@ -475,19 +477,9 @@ public:
         //内参
         Eigen::Matrix3d intrinsicParam;
 
-        if(otherArgs.intrinsicCount == 4)
-        {
-            intrinsicParam<<parameter(0),0,parameter(2),
-                0,parameter(1),parameter(3),
-                0,0,1;
-        }
-        else
-        {
-            intrinsicParam<<parameter(0),parameter(1),parameter(3),
+        intrinsicParam<<parameter(0),parameter(1),parameter(3),
                 0,parameter(2),parameter(4),
                 0,0,1;
-        }
-
 
 
 
@@ -511,7 +503,7 @@ public:
             r(0) = parameter(otherArgs.intrinsicCount+otherArgs.disCount+i*6);
             r(1) = parameter(otherArgs.intrinsicCount+otherArgs.disCount+i*6+1);
             r(2) = parameter(otherArgs.intrinsicCount+otherArgs.disCount+i*6+2);
-            W.block(0,0,3,3) = Rodrigues(r);
+            W.block(0,0,3,3) = GlobleAlgorithm::getInstance()->Rodrigues(r);
             W(0,3) = parameter(otherArgs.intrinsicCount+otherArgs.disCount+i*6+3);
             W(1,3) = parameter(otherArgs.intrinsicCount+otherArgs.disCount+i*6+4);
             W(2,3) = parameter(otherArgs.intrinsicCount+otherArgs.disCount+i*6+5);
@@ -620,23 +612,15 @@ class CalibrationJacobi
             y11 += v_12;
         }
 
-        if(otherArgs.intrinsicCount == 4)
-        {
-            double f_x = para1(0);
-            //double f_y = para1(1);
-            double u_0 = para1(2);
-            //double v_0 = para1(3);
-            obj1 = f_x*x11+u_0;
-        }
-        else
-        {
-            double f_x = para1(0);
-            double gam = para1(1);
-            //double f_y = para1(2);
-            double u_0 = para1(3);
-            //double v_0 = para1(4);
-            obj1 = f_x*x11+gam*y11+u_0;
-        }
+        double f_x = para1(0);
+        double gam = para1(1);
+        //double f_y = para1(2);
+        double u_0 = para1(3);
+        //double v_0 = para1(4);
+
+        obj1 = f_x*x11+gam*y11+u_0;
+
+
 
 
         {
@@ -704,28 +688,15 @@ class CalibrationJacobi
                 y11 += v_12;
             }
 
+            double f_x = para2(0);
+            double gam = para2(1);
+            //double f_y = para2(2);
+            double u_0 = para2(3);
+           // double v_0 = para2(4);
 
-            if(otherArgs.intrinsicCount == 4)
-            {
+            obj2 = f_x*x11+gam*y11+u_0;
 
-                double f_x = para2(0);
-                //double f_y = para2(1);
-                double u_0 = para2(2);
-                // double v_0 = para2(3);
 
-                obj2 = f_x*x11+u_0;
-            }
-            else
-            {
-
-                double f_x = para2(0);
-                double gam = para2(1);
-                //double f_y = para2(2);
-                double u_0 = para2(3);
-                // double v_0 = para2(4);
-
-                obj2 = f_x*x11+gam*y11+u_0;
-            }
 
         }
 
@@ -809,27 +780,13 @@ class CalibrationJacobi
             y11 += v_12;
         }
 
-        if(otherArgs.intrinsicCount == 4)
-        {
-            //double f_x = para1(0);
-            double f_y = para1(1);
-            //double u_0 = para1(2);
-            double v_0 = para1(3);
+        //double f_x = para1(0);
+       // double gam = para1(1);
+        double f_y = para1(2);
+        //double u_0 = para1(3);
+        double v_0 = para1(4);
 
-            obj1 = f_y*y11+v_0;
-        }
-        else
-        {
-
-            //double f_x = para1(0);
-            // double gam = para1(1);
-            double f_y = para1(2);
-            //double u_0 = para1(3);
-            double v_0 = para1(4);
-
-            obj1 = f_y*y11+v_0;
-        }
-
+        obj1 = f_y*y11+v_0;
 
 
 
@@ -898,27 +855,15 @@ class CalibrationJacobi
                 y11 += v_12;
             }
 
+            //double f_x = para2(0);
+            //double gam = para2(1);
+            double f_y = para2(2);
+            //double u_0 = para2(3);
+            double v_0 = para2(4);
+
+            obj2 = f_y*y11+v_0;
 
 
-            if(otherArgs.intrinsicCount == 4)
-            {
-                //double f_x = para2(0);
-                double f_y = para2(1);
-                //double u_0 = para2(2);
-                double v_0 = para2(3);
-
-                obj2 = f_y*y11+v_0;
-            }
-            else
-            {
-                //double f_x = para2(0);
-                //double gam = para2(1);
-                double f_y = para2(2);
-                //double u_0 = para2(3);
-                double v_0 = para2(4);
-
-                obj2 = f_y*y11+v_0;
-            }
 
         }
 
@@ -948,35 +893,19 @@ public:
             //遍历当前图片数据点
             for(int j=0;j<srcCount;++j)
             {
-
                 //内参偏导
-                if(otherArgs.intrinsicCount == 4)
-                {
-                    Jac(k,0) = PartialDeriv_1(parameter,0,otherArgs,i,j);
-                    Jac(k,1) = 0;
-                    Jac(k,2) = 1;
-                    Jac(k,3) = 0;
 
-                    Jac(k+1,0) = 0;
-                    Jac(k+1,1) = PartialDeriv_2(parameter,1,otherArgs,i,j);
-                    Jac(k+1,2) = 0;
-                    Jac(k+1,3) = 1;
-                }
-                else
-                {
-                    Jac(k,0) = PartialDeriv_1(parameter,0,otherArgs,i,j);
-                    Jac(k,1) = PartialDeriv_1(parameter,1,otherArgs,i,j);
-                    Jac(k,2) = 0;
-                    Jac(k,3) = 1;
-                    Jac(k,4) = 0;
+                Jac(k,0) = PartialDeriv_1(parameter,0,otherArgs,i,j);
+                Jac(k,1) = PartialDeriv_1(parameter,1,otherArgs,i,j);
+                Jac(k,2) = 0;
+                Jac(k,3) = 1;
+                Jac(k,4) = 0;
 
-                    Jac(k+1,0) = 0;
-                    Jac(k+1,1) = 0;
-                    Jac(k+1,2) = PartialDeriv_2(parameter,2,otherArgs,i,j);
-                    Jac(k+1,3) = 0;
-                    Jac(k+1,4) = 1;
-                }
-
+                Jac(k+1,0) = 0;
+                Jac(k+1,1) = 0;
+                Jac(k+1,2) = PartialDeriv_2(parameter,2,otherArgs,i,j);
+                Jac(k+1,3) = 0;
+                Jac(k+1,4) = 1;
 
 
                 //畸变偏导
@@ -1052,3 +981,15 @@ public:
 };
 
 #endif // CAMERACALIBRATIONALGORITHM_H
+
+
+
+
+//    f_x*((cos(q)*x + ((r1*x+r2*y+r3*z)/(r1^2+r2^2+r3^2))*(1-cos(q))*r1 + sin(q)*(r2*z - r3*y)/sqrt((r1^2+r2^2+r3^2)) + t1) / (cos(q)*z + ((r1*x+r2*y+r3*z)/(r1^2+r2^2+r3^2))*(1-cos(q))*r3 + sin(q)*(r1*y - r2*x)/sqrt((r1^2+r2^2+r3^2)) + t3) * ( 1+ k1* (((cos(q)*x + ((r1*x+r2*y+r3*z)/(r1^2+r2^2+r3^2))*(1-cos(q))*r1 + sin(q)*(r2*z - r3*y)/sqrt((r1^2+r2^2+r3^2)) + t1) / (cos(q)*z + ((r1*x+r2*y+r3*z)/(r1^2+r2^2+r3^2))*(1-cos(q))*r3 + sin(q)*(r1*y - r2*x)/sqrt((r1^2+r2^2+r3^2)) + t3))^2 + ((cos(q)*y + ((r1*x+r2*y+r3*z)/(r1^2+r2^2+r3^2))*(1-cos(q))*r2 + sin(q)*(r3*x - r1*z)/sqrt((r1^2+r2^2+r3^2)) + t2) / (cos(q)*z + ((r1*x+r2*y+r3*z)/(r1^2+r2^2+r3^2))*(1-cos(q))*r3 + sin(q)*(r1*y - r2*x)/sqrt((r1^2+r2^2+r3^2)) + t3))^2) + k2* (((cos(q)*x + ((r1*x+r2*y+r3*z)/(r1^2+r2^2+r3^2))*(1-cos(q))*r1 + sin(q)*(r2*z - r3*y)/sqrt((r1^2+r2^2+r3^2)) + t1) / (cos(q)*z + ((r1*x+r2*y+r3*z)/(r1^2+r2^2+r3^2))*(1-cos(q))*r3 + sin(q)*(r1*y - r2*x)/sqrt((r1^2+r2^2+r3^2)) + t3))^2 + ((cos(q)*y + ((r1*x+r2*y+r3*z)/(r1^2+r2^2+r3^2))*(1-cos(q))*r2 + sin(q)*(r3*x - r1*z)/sqrt((r1^2+r2^2+r3^2)) + t2) / (cos(q)*z + ((r1*x+r2*y+r3*z)/(r1^2+r2^2+r3^2))*(1-cos(q))*r3 + sin(q)*(r1*y - r2*x)/sqrt((r1^2+r2^2+r3^2)) + t3))^2)^2))+u0
+
+//    ((cos(q)*x + ((r1*x+r2*y+r3*z)/(r1^2+r2^2+r3^2))*(1-cos(q))*r1 + sin(q)*(r2*z - r3*y)/sqrt((r1^2+r2^2+r3^2)) + t1) / (cos(q)*z + ((r1*x+r2*y+r3*z)/(r1^2+r2^2+r3^2))*(1-cos(q))*r3 + sin(q)*(r1*y - r2*x)/sqrt((r1^2+r2^2+r3^2)) + t3))*f_x+u0
+
+//    ((cos(q)*y + ((r1*x+r2*y+r3*z)/(r1^2+r2^2+r3^2))*(1-cos(q))*r2 + sin(q)*(r3*x - r1*z)/sqrt((r1^2+r2^2+r3^2)) + t2) / (cos(q)*z + ((r1*x+r2*y+r3*z)/(r1^2+r2^2+r3^2))*(1-cos(q))*r3 + sin(q)*(r1*y - r2*x)/sqrt((r1^2+r2^2+r3^2)) + t3))*f_y+v0
+
+
+//(((cos(q)*x + ((r1*x+r2*y+r3*z)/(r1^2+r2^2+r3^2))*(1-cos(q))*r1 + sin(q)*(r2*z - r3*y)/sqrt((r1^2+r2^2+r3^2)) + t1) / (cos(q)*z + ((r1*x+r2*y+r3*z)/(r1^2+r2^2+r3^2))*(1-cos(q))*r3 + sin(q)*(r1*y - r2*x)/sqrt((r1^2+r2^2+r3^2)) + t3))^4 + ((cos(q)*y + ((r1*x+r2*y+r3*z)/(r1^2+r2^2+r3^2))*(1-cos(q))*r2 + sin(q)*(r3*x - r1*z)/sqrt((r1^2+r2^2+r3^2)) + t2) / (cos(q)*z + ((r1*x+r2*y+r3*z)/(r1^2+r2^2+r3^2))*(1-cos(q))*r3 + sin(q)*(r1*y - r2*x)/sqrt((r1^2+r2^2+r3^2)) + t3))^4)

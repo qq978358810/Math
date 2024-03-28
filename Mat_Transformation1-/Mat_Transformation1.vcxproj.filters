@@ -52,19 +52,10 @@
     <ClCompile Include="circlefitwidget.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="curvedwidget.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="globlealgorithm.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="hyperboloidmapping.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="imagecorrectionwidget.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="imageview.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="linefitwidget.cpp">
@@ -102,19 +93,10 @@
     <QtMoc Include="circlefitwidget.h">
       <Filter>Header Files</Filter>
     </QtMoc>
-    <QtMoc Include="curvedwidget.h">
-      <Filter>Header Files</Filter>
-    </QtMoc>
     <ClInclude Include="globlealgorithm.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="hyperboloidmapping.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <QtMoc Include="imagecorrectionwidget.h">
-      <Filter>Header Files</Filter>
-    </QtMoc>
-    <QtMoc Include="imageview.h">
       <Filter>Header Files</Filter>
     </QtMoc>
     <QtMoc Include="linefitwidget.h">
@@ -134,17 +116,37 @@
     </QtMoc>
   </ItemGroup>
   <ItemGroup>
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     <CustomBuild Include="debug\moc_predefs.h.cbt">
       <Filter>Generated Files</Filter>
     </CustomBuild>
     <CustomBuild Include="release\moc_predefs.h.cbt">
       <Filter>Generated Files</Filter>
     </CustomBuild>
+    
+    
+    
+    
+    
   </ItemGroup>
   <ItemGroup>
-    <QtUic Include="curvedwidget.ui">
-      <Filter>Form Files</Filter>
-    </QtUic>
     <QtUic Include="mainwindow.ui">
       <Filter>Form Files</Filter>
     </QtUic>

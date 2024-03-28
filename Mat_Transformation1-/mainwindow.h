@@ -12,8 +12,6 @@
 #include "cameracalibrationwidget.h"
 #include "imagecorrectionwidget.h"
 #include "viewtransform.h"
-#include "curvedwidget.h"
-
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
 QT_END_NAMESPACE
@@ -40,6 +38,5 @@ private:
     CameraCalibrationWidget * m_cameraCalibrationWidget;
     ImageCorrectionWidget * m_imageCorrectionWidget;
     ViewTransform* m_viewTransform;
-    CurvedWidget* m_curvedWidget;
 };
 #endif // MAINWINDOW_H

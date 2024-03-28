@@ -3,14 +3,6 @@
 
 #include <iostream>
 using namespace std;
-#include <iostream>
-#include <map>
-#include <utility> // 包含<std::pair>
-#include <QPointf>
-#include <set>
-
-
-
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
@@ -33,10 +25,6 @@ MainWindow::MainWindow(QWidget *parent)
     ui->tabWidget->addTab(m_imageCorrectionWidget,QString("图片矫正"));
     m_viewTransform = new ViewTransform(ui->tabWidget);
     ui->tabWidget->addTab(m_viewTransform,QString("图像视角转换(暂未)"));
-
-    m_curvedWidget = new CurvedWidget(ui->tabWidget);
-    ui->tabWidget->addTab(m_curvedWidget,QString("图像曲面转换"));
-
 }
 
 MainWindow::~MainWindow()

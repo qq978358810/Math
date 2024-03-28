@@ -2,7 +2,7 @@
 #define GLOBLEALGORITHM_H
 
 #include <QObject>
-#include <Eigen/Dense>
+#include <Eigen>
 #include <QPointF>
 #include <QtMath>
 #include <QThread>
@@ -359,5 +359,7 @@ private:
     static QMutex m_mutex;
 
 };
+
+
 
 #endif // GLOBLEALGORITHM_H
